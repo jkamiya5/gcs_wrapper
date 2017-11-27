@@ -1,15 +1,12 @@
 import json
 import traceback
 from enum import Enum
-from logging import DEBUG, StreamHandler, getLogger
+from logging import DEBUG, getLogger
 
 import requests
 
 logger = getLogger(__name__)
-handler = StreamHandler()
-handler.setLevel(DEBUG)
 logger.setLevel(DEBUG)
-logger.addHandler(handler)
 logger.propagate = False
 
 
@@ -17,7 +14,15 @@ class ERROR(Enum):
   STOP = 1
   WAIT = 2
 
-class GcsWrapper():
+
+class GcsWrapper(object):
+
+  __instance = None
+
+  def __new__(cls, *args, **keys):
+    if cls.__instance is None:
+      cls.__instance = object.__new__(cls)
+    return cls.__instance
 
   def __init__(self, project_id, engine_id, api_key, proxies=None, headers=None):
     self.project_id = project_id
