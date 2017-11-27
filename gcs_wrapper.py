@@ -53,7 +53,7 @@ class GcsWrapper(object):
 
         payload["start"] = str(i + 1)
         payload["num"] = str(10 if (max_num - i) > 10 else (max_num - i))
-        # logger.debug("payload:" + str(payload))
+        logger.debug("payload:" + str(payload))
 
         res = requests.get(
             self.custom_search_url,
