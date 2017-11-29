@@ -66,8 +66,12 @@ class GcsWrapper(object):
 
         if "items" not in data:
           try:
-            err_data = json.loads(str(res.decode('utf-8')))
-            if err_data["error"]["errors"][0]["reason"] == "dailyLimitExceeded":
+            info = json.loads(str(res.decode('utf-8')))
+            if "error" not in info:
+                  break
+            err_reason = info["error"]["errors"][0]["reason"]
+            logger.debug("reason:" + str(err_reason))
+            if err_reason == "dailyLimitExceeded":
               return ERROR.STOP.value
             return ERROR.WAIT.value
           except:
