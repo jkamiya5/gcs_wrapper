@@ -120,3 +120,18 @@ class GcsWrapper(object):
         return iamge_urls
 
     return None
+
+  def query_image_urls_multiple_keys(self, search_keys, max_num=10, **arguments):
+    result = []
+    div = int(max_num / len(search_keys)) + 1
+    # print(div)
+    if search_keys is not None and isinstance(search_keys, list):
+      for k in search_keys:
+        urls = self.query_image_urls(search_key=k, max_num=div, **arguments)
+        if urls is None or len(urls) == 0:
+          continue
+        result.extend(urls[:div])
+    ret = result[:max_num]
+    # print(len(result))
+    # print(len(ret))
+    return ret
