@@ -106,21 +106,30 @@ class GcsWrapper(object):
     logger.debug("result_len:" + str(len(result)))
     return result
 
-  def query_image_urls(self, search_key, image_size="large", proxies=None, headers=None, max_num=10, wait_for_proc=100):
+  def query_image_urls(self, search_key, image_size="large", proxies=None, headers=None, max_num=10, wait_for_proc=10, max_retry=3):
+
     params = {}
     params["q"] = search_key
     params["searchType"] = "image"
     params["imgSize"] = image_size
-    result = self.query(params, proxies, headers, max_num)
-    if result == 2:
-      logger.debug("LimitExceeded error. wait for proc")
-      time.sleep(wait_for_proc)
+    retry = 0
+    max_retry =  (max_retry if max_retry < 5 else 5)
+    while (retry < max_retry):
 
-    elif result == 1:
-      logger.debug("dailyLimitExceeded error. proc done")
-      return None
+      result = self.query(params, proxies, headers, max_num)
+      if result == 2:
+        logger.debug("LimitExceeded error. wait for proc")
+        # print("LimitExceeded error. waiting for proc " + str(wait_for_proc) + " seconds")
+        retry += 1
+        time.sleep(wait_for_proc)
+        continue
 
-    elif result is not None and isinstance(result, list) and len(result) != 0:
-      iamge_urls = [x["link"] for x in result]
-      return iamge_urls
+      elif result == 1:
+        logger.debug("dailyLimitExceeded error. proc done")
+        return None
+
+      elif result is not None and isinstance(result, list) and len(result) != 0:
+        iamge_urls = [x["link"] for x in result]
+        return iamge_urls
+
     return None
