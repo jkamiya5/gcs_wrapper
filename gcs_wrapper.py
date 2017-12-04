@@ -25,21 +25,13 @@ class GcsWrapper(object):
       cls.__instance = object.__new__(cls)
     return cls.__instance
 
-  def __init__(self, project_id, engine_id, api_key, proxies=None, headers=None):
+  def __init__(self, project_id, engine_id, api_key):
     self.project_id = project_id
     self.custom_search_engine_id = engine_id
     self.custom_search_api_key = api_key
     self.custom_search_url = "https://www.googleapis.com/customsearch/v1?"
-    self.custom_search_proxies = proxies
-    self.custom_search_headers = headers
 
-  def query(self, query_params, proxies=None, headers=None, max_num=10):
-
-    if proxies is not None:
-      self.custom_search_proxies = proxies
-
-    if headers is not None:
-      self.custom_search_headers = headers
+  def query(self, query_params, max_num=10, **arguments):
 
     result = []
     payload = {}
@@ -55,12 +47,7 @@ class GcsWrapper(object):
         payload["start"] = str(i + 1)
         payload["num"] = str(10 if (max_num - i) > 10 else (max_num - i))
         logger.debug("payload:" + str(payload))
-
-        res = requests.get(
-            self.custom_search_url,
-            params=payload,
-            proxies=self.custom_search_proxies,
-            headers=self.custom_search_headers).content
+        res = requests.get(url=self.custom_search_url, params=payload, **arguments).content
 
         # logger.debug("res:" + str(res))
         data = json.loads(res.decode('utf-8'))
@@ -106,17 +93,17 @@ class GcsWrapper(object):
     logger.debug("result_len:" + str(len(result)))
     return result
 
-  def query_image_urls(self, search_key, image_size="large", proxies=None, headers=None, max_num=10, wait_for_proc=10, max_retry=3):
+  def query_image_urls(self, search_key, image_size="large", wait_for_proc=3, max_num=10, max_retry=3, **arguments):
 
     params = {}
     params["q"] = search_key
     params["searchType"] = "image"
     params["imgSize"] = image_size
     retry = 0
-    max_retry =  (max_retry if max_retry < 5 else 5)
+    max_retry = (max_retry if max_retry < 5 else 5)
     while (retry < max_retry):
 
-      result = self.query(params, proxies, headers, max_num)
+      result = self.query(params, max_num=max_num, **arguments)
       if result == 2:
         logger.debug("LimitExceeded error. wait for proc")
         # print("LimitExceeded error. waiting for proc " + str(wait_for_proc) + " seconds")
