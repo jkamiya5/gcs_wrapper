@@ -93,7 +93,8 @@ class GcsWrapper(object):
     logger.debug("result_len:" + str(len(result)))
     return result
 
-  def query_image_urls(self, search_key, image_size="large", wait_for_proc=3, max_num=10, max_retry=3, **arguments):
+  def query_image_urls(
+      self, search_key, image_size="large", colname="link", wait_for_proc=3, max_num=10, max_retry=3, **arguments):
 
     params = {}
     params["q"] = search_key
@@ -116,7 +117,11 @@ class GcsWrapper(object):
         return None
 
       elif result is not None and isinstance(result, list) and len(result) != 0:
-        iamge_urls = [x["link"] for x in result]
+        iamge_urls = None
+        if colname == "link":
+          iamge_urls = [x["link"] for x in result]
+        elif colname == "thumbnailLink":
+          iamge_urls = [x["image"]["thumbnailLink"] for x in result]
         return iamge_urls
 
     return None
@@ -135,3 +140,9 @@ class GcsWrapper(object):
     # print(len(result))
     # print(len(ret))
     return ret
+
+  def query_image_thumbnail_urls(self, **arguments):
+    return self.query_image_urls(colname="thumbnailLink", **arguments)
+
+  def query_image_thumbnail_urls_multiple_keys(self, **arguments):
+    return self.query_image_urls_multiple_keys(colname="thumbnailLink", **arguments)
