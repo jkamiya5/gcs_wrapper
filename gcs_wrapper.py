@@ -1,4 +1,5 @@
 import json
+import time
 import traceback
 from enum import Enum
 from logging import DEBUG, getLogger
@@ -68,7 +69,7 @@ class GcsWrapper(object):
           try:
             info = json.loads(str(res.decode('utf-8')))
             if "error" not in info:
-                  break
+              break
             err_reason = info["error"]["errors"][0]["reason"]
             logger.debug("reason:" + str(err_reason))
             if err_reason == "dailyLimitExceeded":
@@ -104,3 +105,22 @@ class GcsWrapper(object):
 
     logger.debug("result_len:" + str(len(result)))
     return result
+
+  def query_image_urls(self, search_key, image_size="large", proxies=None, headers=None, max_num=10, wait_for_proc=100):
+    params = {}
+    params["q"] = search_key
+    params["searchType"] = "image"
+    params["imgSize"] = image_size
+    result = self.query(params, proxies, headers, max_num)
+    if result == 2:
+      logger.debug("LimitExceeded error. wait for proc")
+      time.sleep(wait_for_proc)
+
+    elif result == 1:
+      logger.debug("dailyLimitExceeded error. proc done")
+      return None
+
+    elif result is not None and isinstance(result, list) and len(result) != 0:
+      iamge_urls = [x["link"] for x in result]
+      return iamge_urls
+    return None
