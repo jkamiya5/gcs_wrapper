@@ -39,17 +39,14 @@ class GcsWrapper(object):
     payload["key"] = self.custom_search_api_key
     payload["cx"] = self.custom_search_engine_id
     i = 0
-
+    max_num = (max_num if max_num < 100 else 100)
     while i < max_num:
 
       try:
 
         payload["start"] = str(i + 1)
         payload["num"] = str(10 if (max_num - i) > 10 else (max_num - i))
-        logger.debug("payload:" + str(payload))
         res = requests.get(url=self.custom_search_url, params=payload, **arguments).content
-
-        # logger.debug("res:" + str(res))
         data = json.loads(res.decode('utf-8'))
 
         if "items" not in data:
@@ -58,7 +55,7 @@ class GcsWrapper(object):
             if "error" not in info:
               break
             err_reason = info["error"]["errors"][0]["reason"]
-            logger.debug("reason:" + str(err_reason))
+            # logger.debug("reason:" + str(err_reason))
             if err_reason == "dailyLimitExceeded":
               return ERROR.STOP.value
             return ERROR.WAIT.value
@@ -94,20 +91,19 @@ class GcsWrapper(object):
     return result
 
   def query_image_urls(
-      self, search_key, image_size="large", colname="link", wait_for_proc=3, max_num=10, max_retry=3, **arguments):
-
+      self, search_key, max_num=10, image_size="large", colname="link", wait_for_proc=3, max_retry=3, **arguments):
     params = {}
-    params["q"] = search_key
+    params["q"] = search_key.replace("　", " ")
     params["searchType"] = "image"
     params["imgSize"] = image_size
     retry = 0
     max_retry = (max_retry if max_retry < 5 else 5)
     while (retry < max_retry):
 
-      result = self.query(params, max_num=max_num, **arguments)
+      result = self.query(query_params=params, max_num=max_num, **arguments)
       if result == 2:
         logger.debug("LimitExceeded error. wait for proc")
-        # print("LimitExceeded error. waiting for proc " + str(wait_for_proc) + " seconds")
+        print("LimitExceeded error. waiting for proc " + str(wait_for_proc) + " seconds")
         retry += 1
         time.sleep(wait_for_proc)
         continue
@@ -129,7 +125,6 @@ class GcsWrapper(object):
   def query_image_urls_multiple_keys(self, search_keys, max_num=10, **arguments):
     result = []
     div = int(max_num / len(search_keys)) + 1
-    # print(div)
     if search_keys is not None and isinstance(search_keys, list):
       for k in search_keys:
         urls = self.query_image_urls(search_key=k, max_num=div, **arguments)
@@ -137,8 +132,6 @@ class GcsWrapper(object):
           continue
         result.extend(urls[:div])
     ret = result[:max_num]
-    # print(len(result))
-    # print(len(ret))
     return ret
 
   def query_image_thumbnail_urls(self, **arguments):
