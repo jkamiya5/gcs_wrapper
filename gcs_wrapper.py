@@ -37,17 +37,18 @@ class GcsWrapper(object):
     self.custom_search_url = "https://www.googleapis.com/customsearch/v1?"
     self.language_client = language.LanguageServiceClient()
     self.cse_list = [
-        "c2coff", "cr", "cx", "dateRestrict", "exactTerms", "excludeTerms", "fileType", "filter", "gl", "googlehost",
-        "highRange", "hl", "hq", "imgColorType", "imgDominantColor", "imgSize", "imgType", "linkSite", "lowRange",
-        "num", "orTerms", "relatedSite", "rights", "safe", "searchType", "siteSearch", "siteSearchFilter", "sort",
-        "start"
+        "q", "c2coff", "cr", "cx", "dateRestrict", "exactTerms", "excludeTerms", "fileType", "filter", "gl",
+        "googlehost", "highRange", "hl", "hq", "imgColorType", "imgDominantColor", "imgSize", "imgType", "linkSite",
+        "lowRange", "num", "orTerms", "relatedSite", "rights", "safe", "searchType", "siteSearch", "siteSearchFilter",
+        "sort", "start"
     ]
 
-  def query(self, search_key, max_num=10, standardize_search_keyword=False, **arguments):
-    q = self.parse_search_key(search_key, standardize_search_keyword)
+  def query(self, max_num=10, standardize_search_keyword=False, **arguments):
     payload = {}
+    gcs_params = {key: value for key, value in arguments.items() if key in self.cse_list}
+    payload.update(gcs_params)
+    q = self.parse_search_key(gcs_params["q"], standardize_search_keyword)
     payload["q"] = q
-    payload.update({key: value for key, value in arguments.items() if key in self.cse_list})
     arguments_ = {key: value for key, value in arguments.items() if key not in self.cse_list}
     payload["key"] = self.custom_search_api_key
     payload["cx"] = self.custom_search_engine_id
@@ -103,12 +104,12 @@ class GcsWrapper(object):
     # logger.debug("result_len:" + str(len(result[:max_num])))
     return result[:max_num]
 
-  def query_image_urls(self, search_key, colname="link", max_retry=3, wait_for_proc=3, **arguments):
+  def query_image_urls(self, colname="link", max_retry=3, wait_for_proc=3, **arguments):
     retry = 0
     max_retry = (max_retry if max_retry < 5 else 5)
     while (retry < max_retry):
 
-      result = self.query(search_key=search_key, searchType="image", imgSize="large", **arguments)
+      result = self.query(searchType="image", imgSize="large", **arguments)
       if result == 2:
         logger.debug("LimitExceeded error. wait for proc")
         print("LimitExceeded error. waiting for proc " + str(wait_for_proc) + " seconds")
@@ -133,9 +134,11 @@ class GcsWrapper(object):
   def query_image_urls_multiple_keys(self, search_keys, max_num=10, **arguments):
     result = []
     div = int(max_num / len(search_keys)) + 1
+    arguments_ = copy.deepcopy(arguments)
     if search_keys is not None and isinstance(search_keys, list):
       for k in search_keys:
-        urls = self.query_image_urls(search_key=k, max_num=div, **arguments)
+        arguments_["q"] = k
+        urls = self.query_image_urls(max_num=div, **arguments_)
         if urls is None or len(urls) == 0:
           continue
         result.extend(urls[:div])
