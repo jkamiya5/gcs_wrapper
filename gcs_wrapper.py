@@ -1,10 +1,14 @@
 import json
+import sys
 import time
 import traceback
 from enum import Enum
 from logging import DEBUG, getLogger
 
 import requests
+import six
+from google.cloud import language
+from google.cloud.language import enums, types
 
 logger = getLogger(__name__)
 logger.setLevel(DEBUG)
@@ -30,14 +34,19 @@ class GcsWrapper(object):
     self.custom_search_engine_id = engine_id
     self.custom_search_api_key = api_key
     self.custom_search_url = "https://www.googleapis.com/customsearch/v1?"
+    self.language_client = language.LanguageServiceClient()
 
-  def query(self, query_params, max_num=10, **arguments):
-
-    result = []
+  def query(self, search_key, searchType, imgSize, max_num=10, standardize_search_keyword=False, **arguments):
     payload = {}
-    payload.update(query_params)
+    q = self.parse_search_key(search_key, standardize_search_keyword)
+    # print("search_key:" + str(search_key))
+    # print("standardized_search_key:" + str(q))
+    payload["q"] = q
+    payload["searchType"] = searchType
+    payload["imgSize"] = imgSize
     payload["key"] = self.custom_search_api_key
     payload["cx"] = self.custom_search_engine_id
+    result = []
     i = 0
     max_num = (max_num if max_num < 100 else 100)
     while i < max_num:
@@ -52,6 +61,7 @@ class GcsWrapper(object):
         if "items" not in data:
           try:
             info = json.loads(str(res.decode('utf-8')))
+            # print("info:" + str(info))
             if "error" not in info:
               break
             err_reason = info["error"]["errors"][0]["reason"]
@@ -87,20 +97,15 @@ class GcsWrapper(object):
         traceback.print_exc()
         return ERROR.STOP.value
 
-    logger.debug("result_len:" + str(len(result)))
-    return result
+    # logger.debug("result_len:" + str(len(result[:max_num])))
+    return result[:max_num]
 
-  def query_image_urls(
-      self, search_key, max_num=10, image_size="large", colname="link", wait_for_proc=3, max_retry=3, **arguments):
-    params = {}
-    params["q"] = search_key.replace("　", " ")
-    params["searchType"] = "image"
-    params["imgSize"] = image_size
+  def query_image_urls(self, search_key, colname="link", max_retry=3, wait_for_proc=3, **arguments):
     retry = 0
     max_retry = (max_retry if max_retry < 5 else 5)
     while (retry < max_retry):
 
-      result = self.query(query_params=params, max_num=max_num, **arguments)
+      result = self.query(search_key=search_key, searchType="image", imgSize="large", **arguments)
       if result == 2:
         logger.debug("LimitExceeded error. wait for proc")
         print("LimitExceeded error. waiting for proc " + str(wait_for_proc) + " seconds")
@@ -139,3 +144,19 @@ class GcsWrapper(object):
 
   def query_image_thumbnail_urls_multiple_keys(self, **arguments):
     return self.query_image_urls_multiple_keys(colname="thumbnailLink", **arguments)
+
+  def entities_text(self, text):
+    if isinstance(text, six.binary_type):
+      text = text.decode('utf-8')
+    document = types.Document(language="ja", content=text, type=enums.Document.Type.PLAIN_TEXT)
+    entities = self.language_client.analyze_entities(document).entities
+    val = " ".join([x.name for x in entities])
+    return val
+
+  def parse_search_key(self, search_key, standardize_search_keyword=False):
+    search_key_ = search_key.replace("　", " ")
+    if standardize_search_keyword:
+      val = self.entities_text(search_key_)
+      if val is not None:
+        return val
+    return search_key_
