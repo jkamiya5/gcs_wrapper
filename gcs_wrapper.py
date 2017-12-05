@@ -1,3 +1,4 @@
+import copy
 import json
 import sys
 import time
@@ -35,27 +36,29 @@ class GcsWrapper(object):
     self.custom_search_api_key = api_key
     self.custom_search_url = "https://www.googleapis.com/customsearch/v1?"
     self.language_client = language.LanguageServiceClient()
+    self.cse_list = [
+        "c2coff", "cr", "cx", "dateRestrict", "exactTerms", "excludeTerms", "fileType", "filter", "gl", "googlehost",
+        "highRange", "hl", "hq", "imgColorType", "imgDominantColor", "imgSize", "imgType", "linkSite", "lowRange",
+        "num", "orTerms", "relatedSite", "rights", "safe", "searchType", "siteSearch", "siteSearchFilter", "sort",
+        "start"
+    ]
 
-  def query(self, search_key, searchType, imgSize, max_num=10, standardize_search_keyword=False, **arguments):
-    payload = {}
+  def query(self, search_key, max_num=10, standardize_search_keyword=False, **arguments):
     q = self.parse_search_key(search_key, standardize_search_keyword)
-    # print("search_key:" + str(search_key))
-    # print("standardized_search_key:" + str(q))
+    payload = {}
     payload["q"] = q
-    payload["searchType"] = searchType
-    payload["imgSize"] = imgSize
+    payload.update({key: value for key, value in arguments.items() if key in self.cse_list})
+    arguments_ = {key: value for key, value in arguments.items() if key not in self.cse_list}
     payload["key"] = self.custom_search_api_key
     payload["cx"] = self.custom_search_engine_id
     result = []
     i = 0
     max_num = (max_num if max_num < 100 else 100)
     while i < max_num:
-
       try:
-
         payload["start"] = str(i + 1)
         payload["num"] = str(10 if (max_num - i) > 10 else (max_num - i))
-        res = requests.get(url=self.custom_search_url, params=payload, **arguments).content
+        res = requests.get(url=self.custom_search_url, params=payload, **arguments_).content
         data = json.loads(res.decode('utf-8'))
 
         if "items" not in data:
