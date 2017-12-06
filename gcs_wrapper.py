@@ -1,8 +1,10 @@
 import copy
 import json
+import multiprocessing
 import sys
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from logging import DEBUG, getLogger
 
@@ -43,7 +45,7 @@ class GcsWrapper(object):
         "sort", "start"
     ]
 
-  def query(self, max_num=10, standardize_search_keyword=False, **arguments):
+  def parse_args(self, max_num, standardize_search_keyword, arguments):
     payload = {}
     gcs_params = {key: value for key, value in arguments.items() if key in self.cse_list}
     payload.update(gcs_params)
@@ -52,57 +54,90 @@ class GcsWrapper(object):
     arguments_ = {key: value for key, value in arguments.items() if key not in self.cse_list}
     payload["key"] = self.custom_search_api_key
     payload["cx"] = self.custom_search_engine_id
-    result = []
-    i = 0
     max_num = (max_num if max_num < 100 else 100)
+    return max_num, payload, arguments_
+
+  def query(self, max_num=10, mode="normal", standardize_search_keyword=False, **arguments):
+    if mode == "normal":
+      return self.query_normal(max_num, standardize_search_keyword, **arguments)
+    elif mode == "multithread":
+      return self.query_multithread(max_num, standardize_search_keyword, **arguments)
+    logger.debug("mode error")
+    return None
+
+  def query_normal(self, max_num, standardize_search_keyword, **arguments):
+    max_num, payload, arguments_ = self.parse_args(max_num, standardize_search_keyword, arguments)
+    i = 0
+    result = []
     while i < max_num:
-      try:
-        payload["start"] = str(i + 1)
-        payload["num"] = str(10 if (max_num - i) > 10 else (max_num - i))
-        res = requests.get(url=self.custom_search_url, params=payload, **arguments_).content
-        data = json.loads(res.decode('utf-8'))
-
-        if "items" not in data:
-          try:
-            info = json.loads(str(res.decode('utf-8')))
-            # print("info:" + str(info))
-            if "error" not in info:
-              break
-            err_reason = info["error"]["errors"][0]["reason"]
-            # logger.debug("reason:" + str(err_reason))
-            if err_reason == "dailyLimitExceeded":
-              return ERROR.STOP.value
-            return ERROR.WAIT.value
-          except:
-            traceback.print_exc()
-            break
-
-        result.extend(data["items"])
-
-        if len(data["items"]) < 10:
-          break
-
-        i = i + 10
-
-      except requests.exceptions.HTTPError as e:
-        logger.debug("e:" + str(e))
-        err_data = e.content().decode('utf-8')
-        logger.debug("err_data:" + str(err_data))
-        err_data_ = json.loads(err_data)
-        if err_data_["error"]["errors"][0]["reason"] == "dailyLimitExceeded":
-          return ERROR.STOP.value
-        return ERROR.WAIT.value
-
-      except requests.exceptions.SSLError as e2:
-        logger.debug("e:" + str(e2))
-        return ERROR.STOP.value
-
-      except:
-        traceback.print_exc()
-        return ERROR.STOP.value
-
-    # logger.debug("result_len:" + str(len(result[:max_num])))
+      payload["start"] = str(i + 1)
+      payload["num"] = str(10 if (max_num - i) > 10 else (max_num - i))
+      val = self.requests_get_data(payload, **arguments_)
+      if val in (1, 2):
+        return val
+      result.extend(val)
+      if len(val) < 10:
+        break
+      i = i + 10
+    # print("len:" + str(len(result[:max_num])))
     return result[:max_num]
+
+  def query_multithread(self, max_num, standardize_search_keyword, **arguments):
+    max_num, payload, arguments_ = self.parse_args(max_num, standardize_search_keyword, arguments)
+    i = 0
+    executer = ThreadPoolExecutor(max_workers=multiprocessing.cpu_count())
+    futures = []
+    while i < max_num:
+      payload["start"] = str(i + 1)
+      payload["num"] = str(10 if (max_num - i) > 10 else (max_num - i))
+      future = executer.submit(self.requests_get_data, payload, **arguments_)
+      futures.append(future)
+      i = i + 10
+
+    result = []
+    for index, future in enumerate(futures):
+      val = future.result()
+      if val in (1, 2):
+        return val
+      result.extend(val)
+    # print("len:" + str(len(result[:max_num])))
+    return result[:max_num]
+
+  def requests_get_data(self, payload, **arguments):
+    try:
+      res = requests.get(url=self.custom_search_url, params=payload, **arguments).content
+      data = json.loads(res.decode('utf-8'))
+      if "items" not in data:
+        try:
+          info = json.loads(str(res.decode('utf-8')))
+          if "error" not in info:
+            return []
+          err_reason = info["error"]["errors"][0]["reason"]
+          if err_reason == "dailyLimitExceeded":
+            return ERROR.STOP.value
+          return ERROR.WAIT.value
+        except:
+          traceback.print_exc()
+      return data["items"]
+
+    except requests.exceptions.HTTPError as e:
+      logger.debug("e:" + str(e))
+      err_data = e.content().decode('utf-8')
+      logger.debug("err_data:" + str(err_data))
+      err_data_ = json.loads(err_data)
+      if err_data_["error"]["errors"][0]["reason"] == "dailyLimitExceeded":
+        return ERROR.STOP.value
+      return ERROR.WAIT.value
+
+    except requests.exceptions.SSLError as e2:
+      logger.debug("e:" + str(e2))
+      return ERROR.STOP.value
+
+    except:
+      traceback.print_exc()
+      return ERROR.STOP.value
+
+    return []
 
   def query_image_urls(self, colname="link", max_retry=3, wait_for_proc=3, **arguments):
     retry = 0
