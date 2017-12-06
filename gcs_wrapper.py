@@ -79,7 +79,6 @@ class GcsWrapper(object):
       if len(val) < 10:
         break
       i = i + 10
-    # print("len:" + str(len(result[:max_num])))
     return result[:max_num]
 
   def query_multithread(self, max_num, standardize_search_keyword, **arguments):
@@ -100,7 +99,6 @@ class GcsWrapper(object):
       if val in (1, 2):
         return val
       result.extend(val)
-    # print("len:" + str(len(result[:max_num])))
     return result[:max_num]
 
   def requests_get_data(self, payload, **arguments):
@@ -162,7 +160,8 @@ class GcsWrapper(object):
           iamge_urls = [x["link"] for x in result]
         elif colname == "thumbnailLink":
           iamge_urls = [x["image"]["thumbnailLink"] for x in result]
-        return iamge_urls
+        iamge_urls_ = list(set(iamge_urls))
+        return iamge_urls_
 
     return None
 
@@ -177,8 +176,8 @@ class GcsWrapper(object):
         if urls is None or len(urls) == 0:
           continue
         result.extend(urls[:div])
-    ret = result[:max_num]
-    return ret
+    result_ = list(set(result))
+    return result_[:max_num]
 
   def query_image_thumbnail_urls(self, **arguments):
     return self.query_image_urls(colname="thumbnailLink", **arguments)
