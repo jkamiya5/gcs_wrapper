@@ -165,6 +165,67 @@ class GcsWrapper(object):
 
     return None
 
+  def query_image_info(self, add_searchType_none=False, max_retry=3, wait_for_proc=3, **arguments):
+    retry = 0
+    max_retry = (max_retry if max_retry < 5 else 5)
+    while (retry < max_retry):
+
+      result = self.query(searchType="image", **arguments)
+      result2 = None
+
+      if add_searchType_none:
+        result2 = self.query(**arguments)
+
+      if result == 2 or result2 == 2:
+        logger.debug("LimitExceeded error. wait for proc")
+        print("LimitExceeded error. waiting for proc " + str(wait_for_proc) + " seconds")
+        retry += 1
+        time.sleep(wait_for_proc)
+        continue
+
+      elif result == 1 or result2 == 1:
+        logger.debug("dailyLimitExceeded error. proc done")
+        return None
+
+      else:
+        ret = []
+        if result is not None and isinstance(result, list) and len(result) != 0:
+          for x in result:
+            d = {
+                "link": x["link"],
+                "thumbnailLink": x["image"]["thumbnailLink"],
+                "contextLink": x["image"]["contextLink"],
+                "type": x["mime"],
+                "snippet": x["snippet"],
+                "title": x["title"]
+            }
+            ret.append(d)
+
+        if result2 is not None and isinstance(result2, list) and len(result2) != 0:
+          for x in result2:
+            if "pagemap" not in x or "cse_image" not in x["pagemap"] or "cse_thumbnail" not in x["pagemap"]:
+              continue
+            d = {
+                "link":
+                x["pagemap"]["cse_image"][0]["src"],
+                "thumbnailLink":
+                x["pagemap"]["cse_thumbnail"][0]["src"],
+                "contextLink":
+                x["link"],
+                "type":
+                x["pagemap"]["metatags"][0]["og:type"]
+                if "metatags" in x["pagemap"] and "og:type" in x["pagemap"]["metatags"][0] else None,
+                "snippet":
+                x["snippet"],
+                "title":
+                x["title"]
+            }
+            ret.append(d)
+
+        return ret
+
+    return None
+
   def query_image_urls_multiple_keys(self, search_keys, max_num=10, **arguments):
     result = []
     div = int(max_num / len(search_keys)) + 1
@@ -178,6 +239,19 @@ class GcsWrapper(object):
         result.extend(urls[:div])
     result_ = list(set(result))
     return result_[:max_num]
+
+  def query_image_info_multiple_keys(self, search_keys, max_num=10, **arguments):
+    result = []
+    div = int(max_num / len(search_keys)) + 1
+    arguments_ = copy.deepcopy(arguments)
+    if search_keys is not None and isinstance(search_keys, list):
+      for k in search_keys:
+        arguments_["q"] = k
+        info = self.query_image_info(max_num=div, **arguments_)
+        if info is None or len(info) == 0:
+          continue
+        result.extend(info[:div])
+    return result[:max_num]
 
   def query_image_thumbnail_urls(self, **arguments):
     return self.query_image_urls(colname="thumbnailLink", **arguments)
