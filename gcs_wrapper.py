@@ -201,6 +201,7 @@ class GcsWrapper(object):
             }
             ret.append(d)
 
+        ret2 = []
         if result2 is not None and isinstance(result2, list) and len(result2) != 0:
           for x in result2:
             if "pagemap" not in x or "cse_image" not in x["pagemap"] or "cse_thumbnail" not in x["pagemap"]:
@@ -220,7 +221,17 @@ class GcsWrapper(object):
                 "title":
                 x["title"]
             }
-            ret.append(d)
+            ret2.append(d)
+
+        if add_searchType_none:
+          num = int(len(result) / 2)
+          ret3 = []
+          ret3.extend(ret[:num])
+          ret3.extend(ret2[:num])
+          while len(ret3) < len(result):
+            ret3.append(ret[num])
+            num += 1
+          return ret3
 
         return ret
 
